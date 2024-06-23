@@ -101,20 +101,21 @@ export default function Success() {
       const data = await charge.json();
       const { leads, amount, customerId } = data;
 
-      // const req3 = await fetch("/api/hubspot/update-leads", {
-      //   method: "PATCH",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify({ company, idResults }),
-      // });
-      // if (!req.ok) {
-      //   console.error("HTTP error", req.status);
-      //   return;
-      // }
+      const updateLeads = await fetch("/api/hubspot/update-leads", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ company, idResults }),
+      });
+      if (!updateLeads.ok) {
+        console.error("HTTP error", updateLeads.status);
+        return;
+      }
 
-      // const IDList = await req3.json();
-      // console.log("Frontend: Leads were Updated By ID: ", IDList);
+      const IDList = await updateLeads.json();
+      console.log("Frontend: Leads were Updated By ID: ", IDList);
+
       if (csvContent.length > 0 && data) {
         console.log(
           `Transaction Data for Customer ${customerId}: ${leads} lead(s) and $${amount}`,
