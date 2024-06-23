@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 
 interface ResultItem {
@@ -30,6 +28,11 @@ export default function Success() {
         method: "GET",
       });
 
+      if (!companyInfo.ok) {
+        console.error("POST error", companyInfo.status);
+        return;
+      }
+
       const info = await companyInfo.json();
       const company = info.company;
       const companyEmail = info.email;
@@ -40,19 +43,19 @@ export default function Success() {
       );
 
       // Call the count of available leads. Returns Customer information.
-      const req = await fetch("/api/hubspot/count-leads", {
+      const leadData = await fetch("/api/hubspot/get-leads", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ zipCodes }),
       });
-      if (!req.ok) {
-        console.error("POST error", req.status);
+      if (!leadData.ok) {
+        console.error("POST error", leadData.status);
         return;
       }
 
-      const res = await req.json();
+      const res = await leadData.json();
       const leadCount = res.count as number;
       const customerInfo = res.customerInfo;
       const idResults = res.ids;
@@ -75,12 +78,28 @@ export default function Success() {
         )}`
       );
 
-      // const csvContent = ["ID,Email,First Name,Last Name,Phone"].concat(
-      //   customerInfo.map(
-      //     (contact: ResultItem) =>
-      //       `${contact.id},${contact.email},${contact.firstname},${contact.lastname},${contact.phone}`
-      //   )
-      // );
+      const csvContent = ["ID,Email,First Name,Last Name,Phone"].concat(
+        customerInfo.map(
+          (contact: ResultItem) =>
+            `${contact.id},${contact.email},${contact.firstname},${contact.lastname},${contact.phone}`
+        )
+      );
+
+      const charge = await fetch("/api/stripe/charge-later", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sessionId, leadCount }),
+      });
+
+      if (!charge.ok) {
+        console.error("HTTP error", charge.status);
+        return;
+      }
+
+      const data = await charge.json();
+      const { leads, amount, customerId } = data;
 
       // const req3 = await fetch("/api/hubspot/update-leads", {
       //   method: "PATCH",
@@ -96,11 +115,33 @@ export default function Success() {
 
       // const IDList = await req3.json();
       // console.log("Frontend: Leads were Updated By ID: ", IDList);
+      if (csvContent.length > 0 && data) {
+        console.log(
+          `Transaction Data for Customer ${customerId}: ${leads} lead(s) and $${amount}`,
+          data
+        );
+        console.log("CSV: ", csvContent);
 
-      setTimeout(() => {
-        setWaiting(false);
-        setLoaded(true);
-      }, 2000);
+        // Create a Blob from the CSV content
+        const blob = new Blob([csvContent.join("\n")], {
+          type: "text/csv;charset=utf-8;",
+        });
+
+        // Email this out to them as well. Later we will need to SMS too.
+        // ------------ USE RESEND API HERE ------------
+        // ------------ USE RELEVANT PHONE SMS API HERE ----------
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `contactsFound.csv`;
+        document.body.appendChild(link);
+        link.click();
+
+        setTimeout(() => {
+          setWaiting(false);
+          setLoaded(true);
+        }, 2000);
+      }
     }
   };
 
@@ -116,12 +157,9 @@ export default function Success() {
           <button
             className="bg-blue-500 hover:bg-blue-700 text-white text-center font-bold py-2 px-4 rounded"
             onClick={handleChargeLater}
-            disabled={waiting}
+            disabled={loaded || waiting}
           >
-            {loaded ? `Successfully Billed` : ``}
-            {waiting
-              ? `Searching & Billing...`
-              : `Search for Leads and Auto-Bill`}
+            {loaded ? `Successfully Billed` : `Search for Leads and Auto-Bill`}
           </button>
         </div>
       </div>
